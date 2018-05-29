@@ -14,6 +14,8 @@ import sys, getopt, time
 
 ## Sets Up Scale
 #
+# @param serialport is a serial object that is connected to the serial port the scale is connected on
+#
 # Handles setting the board up after being turned on (taring and calibrating the scale)
 # Asks the user for the state of the scale during the process
 #
@@ -25,17 +27,16 @@ def setup_scale(serialport):
     temp = ''
     while temp != 'Readings:\r\n'.encode('latin-1'):
         temp = serialport.readline() # Repeat until we get to the line before readings from sensor
-        print(temp)
+        #print(temp)
     line = serialport.readline()
-    print(line)
+    #print(line)
     time.sleep(.1)
-    print('sending x')
     serialport.write('x'.encode('latin-1')) # Get into menu to calibrate board
     temp = serialport.read()
-    print(temp)
+    #print(temp)
     while temp != '>'.encode('latin-1'):
         temp = serialport.readline() # Repeat till we get to prompt
-        print(temp)
+        #print(temp)
         if temp == ''.encode('latin-1'):
             serialport.write('x'.encode('latin-1'))
     input('Remove all weight from scale. Press enter to continue...')
@@ -43,15 +44,18 @@ def setup_scale(serialport):
     temp = ' '
     while temp != '>'.encode('latin-1'):
         temp = serialport.readline()  # Repeat till we get to prompt
-        print(temp)
+        #print(temp)
         if temp == ''.encode('latin-1'):
             serialport.write('x'.encode('latin-1'))
     # TODO: calibrate with known weight knownweight = input('Put known weight on scale. Enter value: ')
     serialport.write('x'.encode('latin-1'))
     line = serialport.readline()
-    print(line)
+    #print(line)
 
 ## Read Sensor
+#
+# @param serialport is a serial object that is connected to the serial port the scale is connected on
+# @return string of the weight read by the scale
 #
 # Reads a line from the board, storing the measured weight. The format of the string from the board is:
 #       time,weight,units,temperature,
@@ -62,10 +66,10 @@ def read(serialport):
     while line == ''.encode('latin-1'):
         serialport.write('t'.encode('latin-1'))
         line = serialport.readline()
-        print(line)
+        #print(line)
     linedata = line.split(','.encode('latin-1'))
     linedata.pop()
-    print(linedata)
+    #print(linedata)
     time, weight, units, temperature = linedata
     time = time.decode('utf-8')
     weight = weight.decode('utf-8')
@@ -111,8 +115,10 @@ def main(argv):
     # TODO: check for errors when opening serial port
     print('Serial port opened')
 
+    # When we get the signal the scale is ready for setup
     setup_scale(ser)
 
+    # When Scribe wants a reading
     print('Weight:', read(ser))
     send_to_scribe()
 
