@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 ## Scale Manager
 #
@@ -111,9 +111,16 @@ def main(argv):
             baud = arg
 
     print('Opening serial port', tty, 'at', baud, 'baud...')
-    ser = serial.Serial(tty, baud, timeout=1) # This defaults to /dev/ttyUSB0 at 9600 baud if nothing was passed in
-    # TODO: check for errors when opening serial port
-    print('Serial port opened')
+    try:
+        ser = serial.Serial(tty, baud, timeout=1) # This defaults to /dev/ttyUSB0 at 9600 baud if nothing was passed in
+    except ValueError as ve: # Some value we passed in was bad
+        print(ve)
+        exit(2)
+    except serial.SerialException as se: # Unable to find tty device
+        print(se)
+        exit(2)
+    else:
+        print('Serial port opened')
 
     # When we get the signal the scale is ready for setup
     setup_scale(ser)
