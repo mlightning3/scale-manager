@@ -25,7 +25,7 @@ import socket
 #
 # Steps involved:
 # 1. Remove all weight from scale and tare sensor
-# 2. Put a known weight on scale and calibrate to that value
+# 2. Put a known weight on scale and calibrate to that value **Currently not implemented**
 def setup_scale(serialport, hostconnection):
     print('Setting up scale...')
     temp = ''
@@ -40,19 +40,21 @@ def setup_scale(serialport, hostconnection):
         if temp == ''.encode('latin-1'):
             serialport.write('x'.encode('latin-1'))
 
-    response = ''
-    while response != 'yes':
-        hostconnection.send('is scale empty'.encode('UTF-8'))
-        response = hostconnection.recv(1024)
+    #response = ''
+    #while response != 'yes':
+    #    hostconnection.send('is scale empty'.encode('UTF-8'))
+    #    response = hostconnection.recv(1024)
 
-    #input('Remove all weight from scale. Press enter to continue...')
+    input('Remove all weight from scale. Press enter to continue...')
     serialport.write('1'.encode('latin-1'))
     temp = ' '
     while temp != '>'.encode('latin-1'):
         temp = serialport.readline()  # Repeat till we get to prompt
         if temp == ''.encode('latin-1'):
             serialport.write('x'.encode('latin-1'))
-    # TODO: calibrate with known weight knownweight = input('Put known weight on scale. Enter value: ')
+
+    # TODO: calibrate with known weight if first ever time running
+
     serialport.write('x'.encode('latin-1'))
     line = serialport.readline()
 
@@ -63,7 +65,7 @@ def setup_scale(serialport, hostconnection):
 #
 # Reads a line from the board, storing the measured weight. The format of the string from the board is:
 #       time,weight,units,temperature,
-# With the time being in milliseconds since the board powered on, units being either lbs or kg, and temperature in celsius
+# With time being in milliseconds since the board powered on, units being either lbs or kg, and temperature in celsius
 def read(serialport):
     serialport.write('t'.encode('latin-1'))
     line = serialport.readline()
@@ -82,12 +84,18 @@ def read(serialport):
 ## Send Data To Scribe
 #
 # @param hostconnection is a socket that is connected to the Scrybe server
+# @return a positive value if data sent ok, a negative value if there was an error when sending the data
 #
 # Updates Scribe with the patient's weight
 def send_to_scrybe(value, hostconnection):
     print('...sending...')
-    hostconnection.send(bytes(value, 'UTF-8'))
-
+    try:
+        hostconnection.send(bytes(value, 'UTF-8'))
+    except OSError as ose:
+        print(ose)
+        return -1
+    else:
+        return 1
 
 ## Main
 #
@@ -127,6 +135,7 @@ def main(argv):
         elif opt in ("-p", "--port"):
             port = arg
 
+    # Opens serial connection to scale
     print('Opening serial port', tty, 'at', baud, 'baud...')
     try:
         ser = serial.Serial(tty, baud, timeout=1) # This defaults to /dev/ttyUSB0 at 9600 baud if nothing was passed in
@@ -139,20 +148,32 @@ def main(argv):
     else:
         print('Serial port opened')
 
+    # Opens network connection to Scrybe
     print('Connecting to Scrybe at', host_ip, 'on port', port, '...')
     host_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    host_socket.connect((host_ip, port)) # Defaults to localhost at 8089
-    # TODO: error handling
-    host_socket.send('scale connecting'.encode('UTF-8'))
-    msg = host_socket.recv(1024)
-    print('Connected to Scrybe')
+    try:
+        host_socket.connect((host_ip, port)) # Defaults to localhost at 8089
+    except OSError as ose: # Catch any error related to the socket, print the error and close
+        print(ose)
+        ser.close()
+        exit(2)
+    else:
+        host_socket.send('scale connecting'.encode('UTF-8'))
+        #msg = host_socket.recv(1024)
+        print('Connected to Scrybe')
 
+    # Now that we are connected to things, set up the scale
     setup_scale(ser, host_socket)
 
-    # When Scribe wants a reading
-    print('Weight:', read(ser))
-    send_to_scrybe(read(ser))
+    # Give Scrybe data
+    # Currently just sends forever
+    while True:
+        weight = read(ser)
+        print('Weight:', weight)
+        if send_to_scrybe(weight, host_socket) < 0:
+            break
 
+    # Close up connections
     host_socket.close()
     ser.close()
 
